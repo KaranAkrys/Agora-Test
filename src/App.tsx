@@ -9,8 +9,10 @@ import './App.css'
 
 type LogLine = { time: string; text: string }
 
+const DEFAULT_APP_ID = 'dd400f2227314618814501df77c74007'
+
 function App() {
-  const [appId, setAppId] = useState(() => localStorage.getItem('agora_app_id') ?? '')
+  const [appId, setAppId] = useState(() => localStorage.getItem('agora_app_id') ?? DEFAULT_APP_ID)
   const [channel, setChannel] = useState(() => localStorage.getItem('agora_channel') ?? 'test-room')
   const [token, setToken] = useState(() => localStorage.getItem('agora_token') ?? '')
   const [uid, setUid] = useState(() => localStorage.getItem('agora_uid') ?? '')
