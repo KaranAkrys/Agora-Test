@@ -1,0 +1,168 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f1115;
+  color: #e6e8eb;
+}
+
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: #9aa1ab;
+  margin: 0 0 24px;
+  font-size: 14px;
+}
+
+.panel {
+  background: #171a21;
+  border: 1px solid #262b36;
+  border-radius: 12px;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 12px;
+  color: #9aa1ab;
+}
+
+.field input {
+  background: #0f1115;
+  border: 1px solid #2c3140;
+  color: #e6e8eb;
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 14px;
+}
+
+.field input:disabled {
+  opacity: 0.6;
+}
+
+.actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 1px solid #2c3140;
+  background: #1f2430;
+  color: #e6e8eb;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #262c3a;
+}
+
+button.primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+button.primary:hover {
+  background: #2f6fdb;
+}
+
+button.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}
+
+button.danger:hover {
+  background: #b91c1c;
+}
+
+.videos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.video-tile {
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #262b36;
+}
+
+.video-label {
+  font-size: 12px;
+  color: #9aa1ab;
+  padding: 8px 10px;
+  background: #171a21;
+}
+
+.video-surface {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+}
+
+.log-panel {
+  background: #171a21;
+  border: 1px solid #262b36;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.log-title {
+  font-size: 12px;
+  color: #9aa1ab;
+  margin-bottom: 8px;
+}
+
+.log-body {
+  max-height: 220px;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.log-empty {
+  color: #5b6270;
+}
+
+.log-line {
+  color: #cdd2da;
+}
+
+.log-time {
+  color: #6b7280;
+  margin-right: 6px;
+}
