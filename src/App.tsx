@@ -8,25 +8,35 @@ import AgoraRTC, {
 import './App.css'
 
 type LogLine = { time: string; text: string }
-
-const DEFAULT_APP_ID = 'dd400f2227314618814501df77c74007'
+type CallType = 'video' | 'audio'
 
 function App() {
-  const [appId, setAppId] = useState(() => localStorage.getItem('agora_app_id') ?? DEFAULT_APP_ID)
+  const [appId, setAppId] = useState(() => localStorage.getItem('agora_app_id') ?? '')
   const [channel, setChannel] = useState(() => localStorage.getItem('agora_channel') ?? 'test-room')
   const [token, setToken] = useState(() => localStorage.getItem('agora_token') ?? '')
   const [uid, setUid] = useState(() => localStorage.getItem('agora_uid') ?? '')
+  const [callType, setCallType] = useState<CallType>(
+    () => (localStorage.getItem('agora_call_type') as CallType) ?? 'video'
+  )
 
   const [joined, setJoined] = useState(false)
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
   const [logs, setLogs] = useState<LogLine[]>([])
   const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([])
+  const [recording, setRecording] = useState(false)
+  const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
+  const [recordedMime, setRecordedMime] = useState<string>('')
 
   const clientRef = useRef<IAgoraRTCClient | null>(null)
   const localAudioRef = useRef<IMicrophoneAudioTrack | null>(null)
   const localVideoRef = useRef<ICameraVideoTrack | null>(null)
   const localVideoDivRef = useRef<HTMLDivElement | null>(null)
+  const activeCallTypeRef = useRef<CallType>('video')
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<BlobPart[]>([])
+  const remoteUsersRef = useRef<IAgoraRTCRemoteUser[]>([])
 
   const log = (text: string) => {
     setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text }].slice(-100))
@@ -44,6 +54,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem('agora_uid', uid)
   }, [uid])
+  useEffect(() => {
+    localStorage.setItem('agora_call_type', callType)
+  }, [callType])
+  useEffect(() => {
+    remoteUsersRef.current = remoteUsers
+  }, [remoteUsers])
 
   const ensureClient = () => {
     if (!clientRef.current) {
@@ -53,12 +69,11 @@ function App() {
       client.on('user-published', async (user, mediaType) => {
         await client.subscribe(user, mediaType)
         log(`Subscribed to ${user.uid}'s ${mediaType} track`)
-        if (mediaType === 'video') {
-          setRemoteUsers((prev) => {
-            const others = prev.filter((u) => u.uid !== user.uid)
-            return [...others, user]
-          })
-        }
+        // Trigger a re-render either way so audio-only remote users still get a tile
+        setRemoteUsers((prev) => {
+          const others = prev.filter((u) => u.uid !== user.uid)
+          return [...others, user]
+        })
         if (mediaType === 'audio') {
           user.audioTrack?.play()
         }
@@ -66,9 +81,14 @@ function App() {
 
       client.on('user-unpublished', (user, mediaType) => {
         log(`${user.uid} unpublished ${mediaType}`)
-        if (mediaType === 'video') {
-          setRemoteUsers((prev) => prev.filter((u) => u.uid !== user.uid))
-        }
+        setRemoteUsers((prev) => {
+          const others = prev.filter((u) => u.uid !== user.uid)
+          // keep the tile if the user still has another media type published
+          if (user.hasAudio || user.hasVideo) {
+            return [...others, user]
+          }
+          return others
+        })
       })
 
       client.on('user-left', (user) => {
@@ -96,20 +116,27 @@ function App() {
       const client = ensureClient()
       const numericUid = uid.trim() ? Number(uid.trim()) : null
 
-      log(`Joining channel "${channel}" ...`)
+      log(`Joining channel "${channel}" as a ${callType.toUpperCase()} call ...`)
       await client.join(appId.trim(), channel.trim(), token.trim() || null, numericUid)
       log('Joined channel successfully')
 
-      const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks()
+      activeCallTypeRef.current = callType
+
+      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
       localAudioRef.current = audioTrack
-      localVideoRef.current = videoTrack
 
-      if (localVideoDivRef.current) {
-        videoTrack.play(localVideoDivRef.current)
+      if (callType === 'video') {
+        const videoTrack = await AgoraRTC.createCameraVideoTrack()
+        localVideoRef.current = videoTrack
+        if (localVideoDivRef.current) {
+          videoTrack.play(localVideoDivRef.current)
+        }
+        await client.publish([audioTrack, videoTrack])
+        log('Published local audio + video tracks')
+      } else {
+        await client.publish([audioTrack])
+        log('Published local audio track only (audio call — no camera captured)')
       }
-
-      await client.publish([audioTrack, videoTrack])
-      log('Published local audio + video tracks')
 
       setJoined(true)
     } catch (err) {
@@ -151,12 +178,81 @@ function App() {
     log(`Camera ${next ? 'enabled' : 'disabled'}`)
   }
 
+  const startRecording = () => {
+    if (!localAudioRef.current) {
+      log('ERROR: no local audio track — join the call before recording')
+      return
+    }
+    try {
+      const AudioContextCtor =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const ctx = new AudioContextCtor()
+      const destination = ctx.createMediaStreamDestination()
+
+      const localTrack = localAudioRef.current.getMediaStreamTrack()
+      const localSource = ctx.createMediaStreamSource(new MediaStream([localTrack]))
+      localSource.connect(destination)
+
+      let mixedCount = 1
+      remoteUsersRef.current.forEach((user) => {
+        if (user.audioTrack) {
+          const remoteTrack = user.audioTrack.getMediaStreamTrack()
+          const remoteSource = ctx.createMediaStreamSource(new MediaStream([remoteTrack]))
+          remoteSource.connect(destination)
+          mixedCount += 1
+        }
+      })
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm'
+      const recorder = new MediaRecorder(destination.stream, { mimeType })
+      recordedChunksRef.current = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data)
+      }
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+        const url = URL.createObjectURL(blob)
+        setRecordedUrl((prevUrl) => {
+          if (prevUrl) URL.revokeObjectURL(prevUrl)
+          return url
+        })
+        setRecordedMime(mimeType)
+        log(`Recording stopped — ${(blob.size / 1024).toFixed(1)} KB captured, ready below`)
+        ctx.close().catch(() => {})
+      }
+
+      recorder.start()
+      audioCtxRef.current = ctx
+      mediaRecorderRef.current = recorder
+      setRecording(true)
+      log(
+        `Recording started (Web Audio API, no backend) — mixing ${mixedCount} audio source${mixedCount > 1 ? 's' : ''} (your mic${mixedCount > 1 ? ' + remote participant(s)' : ', no remote participants yet'})`
+      )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      log(`ERROR starting recording: ${message}`)
+    }
+  }
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop()
+    mediaRecorderRef.current = null
+    setRecording(false)
+  }
+
   useEffect(() => {
     return () => {
       localAudioRef.current?.close()
       localVideoRef.current?.close()
       clientRef.current?.leave().catch(() => {})
+      mediaRecorderRef.current?.stop()
+      audioCtxRef.current?.close().catch(() => {})
+      if (recordedUrl) URL.revokeObjectURL(recordedUrl)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -204,6 +300,28 @@ function App() {
           />
         </div>
 
+        <div className="field call-type-field">
+          <label>Consultation type</label>
+          <div className="segmented">
+            <button
+              type="button"
+              className={callType === 'video' ? 'seg-btn active' : 'seg-btn'}
+              onClick={() => setCallType('video')}
+              disabled={joined}
+            >
+              Video Call
+            </button>
+            <button
+              type="button"
+              className={callType === 'audio' ? 'seg-btn active' : 'seg-btn'}
+              onClick={() => setCallType('audio')}
+              disabled={joined}
+            >
+              Audio Call
+            </button>
+          </div>
+        </div>
+
         <div className="actions">
           {!joined ? (
             <button className="primary" onClick={handleJoin}>
@@ -215,7 +333,9 @@ function App() {
                 Leave Call
               </button>
               <button onClick={toggleMic}>{micOn ? 'Mute Mic' : 'Unmute Mic'}</button>
-              <button onClick={toggleCam}>{camOn ? 'Turn Camera Off' : 'Turn Camera On'}</button>
+              {activeCallTypeRef.current === 'video' && (
+                <button onClick={toggleCam}>{camOn ? 'Turn Camera Off' : 'Turn Camera On'}</button>
+              )}
             </>
           )}
         </div>
@@ -223,13 +343,59 @@ function App() {
 
       <div className="videos">
         <div className="video-tile">
-          <div className="video-label">You (local)</div>
-          <div className="video-surface" ref={localVideoDivRef} />
+          <div className="video-label">You (local) — {callType === 'video' ? 'Video' : 'Audio only'}</div>
+          {callType === 'video' ? (
+            <div className="video-surface" ref={localVideoDivRef} />
+          ) : (
+            <AudioOnlyPlaceholder />
+          )}
         </div>
         {remoteUsers.map((user) => (
           <RemoteTile key={user.uid} user={user} />
         ))}
       </div>
+
+      {joined && (
+        <div className="panel recording-panel">
+          <div className="recording-row">
+            <div className="recording-status">
+              {recording ? (
+                <span className="rec-indicator">
+                  <span className="rec-dot" /> Recording…
+                </span>
+              ) : (
+                <span className="rec-idle">Not recording</span>
+              )}
+            </div>
+            <div className="actions">
+              {!recording ? (
+                <button className="primary" onClick={startRecording}>
+                  Start Recording
+                </button>
+              ) : (
+                <button className="danger" onClick={stopRecording}>
+                  Stop Recording
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="recording-note">
+            Client-side only — mixes your mic + every currently-connected remote participant's audio via the Web
+            Audio API, right in this browser tab. Nothing is uploaded or saved anywhere; nothing is sent to a
+            backend. Participants who join after you click Start won't be included in the mix.
+          </p>
+
+          {recordedUrl && (
+            <div className="recorded-result">
+              <div className="recorded-label">Last recording ({recordedMime})</div>
+              <audio className="recorded-audio" controls src={recordedUrl} />
+              <a className="download-link" href={recordedUrl} download={`consult-recording-${Date.now()}.webm`}>
+                Download recording
+              </a>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="log-panel">
         <div className="log-title">Event log</div>
@@ -246,22 +412,32 @@ function App() {
   )
 }
 
+function AudioOnlyPlaceholder() {
+  return (
+    <div className="audio-placeholder">
+      <div className="audio-icon">🎙️</div>
+      <div className="audio-caption">Audio only — no camera published</div>
+    </div>
+  )
+}
+
 function RemoteTile({ user }: { user: IAgoraRTCRemoteUser }) {
   const ref = useRef<HTMLDivElement | null>(null)
+  const hasVideo = Boolean(user.videoTrack) && user.hasVideo
 
   useEffect(() => {
-    if (ref.current && user.videoTrack) {
+    if (ref.current && user.videoTrack && user.hasVideo) {
       user.videoTrack.play(ref.current)
     }
     return () => {
       user.videoTrack?.stop()
     }
-  }, [user])
+  }, [user, hasVideo])
 
   return (
     <div className="video-tile">
-      <div className="video-label">Remote user {user.uid}</div>
-      <div className="video-surface" ref={ref} />
+      <div className="video-label">Remote user {user.uid} — {hasVideo ? 'Video' : 'Audio only'}</div>
+      {hasVideo ? <div className="video-surface" ref={ref} /> : <AudioOnlyPlaceholder />}
     </div>
   )
 }
