@@ -10,6 +10,14 @@ import './App.css'
 type LogLine = { time: string; text: string }
 type CallType = 'video' | 'audio'
 
+function connectTrackToDestination(
+  ctx: AudioContext,
+  destination: MediaStreamAudioDestinationNode,
+  track: MediaStreamTrack
+) {
+  ctx.createMediaStreamSource(new MediaStream([track])).connect(destination)
+}
+
 function App() {
   const [appId, setAppId] = useState(() => localStorage.getItem('agora_app_id') ?? '')
   const [channel, setChannel] = useState(() => localStorage.getItem('agora_channel') ?? 'test-room')
@@ -33,9 +41,11 @@ function App() {
   const localVideoDivRef = useRef<HTMLDivElement | null>(null)
   const activeCallTypeRef = useRef<CallType>('video')
   const audioCtxRef = useRef<AudioContext | null>(null)
+  const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<BlobPart[]>([])
   const remoteUsersRef = useRef<IAgoraRTCRemoteUser[]>([])
+  const recordingRef = useRef(false)
 
   const log = (text: string) => {
     setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text }].slice(-100))
@@ -56,6 +66,9 @@ function App() {
   useEffect(() => {
     remoteUsersRef.current = remoteUsers
   }, [remoteUsers])
+  useEffect(() => {
+    recordingRef.current = recording
+  }, [recording])
 
   const ensureClient = () => {
     if (!clientRef.current) {
@@ -72,6 +85,10 @@ function App() {
         })
         if (mediaType === 'audio') {
           user.audioTrack?.play()
+          if (recordingRef.current && audioCtxRef.current && destinationRef.current && user.audioTrack) {
+            connectTrackToDestination(audioCtxRef.current, destinationRef.current, user.audioTrack.getMediaStreamTrack())
+            log(`Added ${user.uid}'s audio to the in-progress recording`)
+          }
         }
       })
 
@@ -141,6 +158,12 @@ function App() {
   }
 
   const handleLeave = async () => {
+    if (recording) {
+      const proceed = window.confirm(
+        'A recording is in progress. Leaving now hides the Stop/Download controls and the recording will be stuck running with no way to retrieve it. Leave anyway?'
+      )
+      if (!proceed) return
+    }
     try {
       localAudioRef.current?.close()
       localVideoRef.current?.close()
@@ -184,16 +207,12 @@ function App() {
       const ctx = new AudioContextCtor()
       const destination = ctx.createMediaStreamDestination()
 
-      const localTrack = localAudioRef.current.getMediaStreamTrack()
-      const localSource = ctx.createMediaStreamSource(new MediaStream([localTrack]))
-      localSource.connect(destination)
+      connectTrackToDestination(ctx, destination, localAudioRef.current.getMediaStreamTrack())
 
       let mixedCount = 1
       remoteUsersRef.current.forEach((user) => {
         if (user.audioTrack) {
-          const remoteTrack = user.audioTrack.getMediaStreamTrack()
-          const remoteSource = ctx.createMediaStreamSource(new MediaStream([remoteTrack]))
-          remoteSource.connect(destination)
+          connectTrackToDestination(ctx, destination, user.audioTrack.getMediaStreamTrack())
           mixedCount += 1
         }
       })
@@ -217,14 +236,16 @@ function App() {
         setRecordedMime(mimeType)
         log(`Recording stopped — ${(blob.size / 1024).toFixed(1)} KB captured, ready below`)
         ctx.close().catch(() => {})
+        destinationRef.current = null
       }
 
       recorder.start()
       audioCtxRef.current = ctx
+      destinationRef.current = destination
       mediaRecorderRef.current = recorder
       setRecording(true)
       log(
-        `Recording started (Web Audio API, no backend) — mixing ${mixedCount} audio source${mixedCount > 1 ? 's' : ''} (your mic${mixedCount > 1 ? ' + remote participant(s)' : ', no remote participants yet'})`
+        `Recording started (Web Audio API, no backend) — mixing ${mixedCount} audio source${mixedCount > 1 ? 's' : ''} (your mic${mixedCount > 1 ? ' + remote participant(s)' : ', no remote participants yet'}). Anyone who joins or rejoins afterward is added live.`
       )
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -365,9 +386,10 @@ function App() {
             </div>
           </div>
           <p className="recording-note">
-            Client-side only — mixes your mic + every currently-connected remote participant's audio via the Web
-            Audio API, right in this browser tab. Nothing is uploaded or saved anywhere; nothing is sent to a
-            backend. Participants who join after you click Start won't be included in the mix.
+            Client-side only — mixes your mic + every remote participant's audio live via the Web Audio API, right
+            in this browser tab, including anyone who joins or rejoins after you click Start. Nothing is uploaded
+            or saved anywhere; nothing is sent to a backend. If a participant goes quiet (e.g. they left and
+            haven't rejoined), that stretch of the recording is simply silent — it isn't filled in retroactively.
           </p>
 
           {recordedUrl && (
