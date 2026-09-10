@@ -14,7 +14,6 @@ function App() {
   const [appId, setAppId] = useState(() => localStorage.getItem('agora_app_id') ?? '')
   const [channel, setChannel] = useState(() => localStorage.getItem('agora_channel') ?? 'test-room')
   const [token, setToken] = useState(() => localStorage.getItem('agora_token') ?? '')
-  const [uid, setUid] = useState(() => localStorage.getItem('agora_uid') ?? '')
   const [callType, setCallType] = useState<CallType>(
     () => (localStorage.getItem('agora_call_type') as CallType) ?? 'video'
   )
@@ -51,9 +50,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem('agora_token', token)
   }, [token])
-  useEffect(() => {
-    localStorage.setItem('agora_uid', uid)
-  }, [uid])
   useEffect(() => {
     localStorage.setItem('agora_call_type', callType)
   }, [callType])
@@ -114,10 +110,9 @@ function App() {
     }
     try {
       const client = ensureClient()
-      const numericUid = uid.trim() ? Number(uid.trim()) : null
 
       log(`Joining channel "${channel}" as a ${callType.toUpperCase()} call ...`)
-      await client.join(appId.trim(), channel.trim(), token.trim() || null, numericUid)
+      await client.join(appId.trim(), channel.trim(), token.trim() || null, null)
       log('Joined channel successfully')
 
       activeCallTypeRef.current = callType
@@ -281,7 +276,7 @@ function App() {
             disabled={joined}
           />
         </div>
-        <div className="field">
+        <div className="field field-full">
           <label>Token (optional)</label>
           <input
             value={token}
@@ -290,16 +285,6 @@ function App() {
             disabled={joined}
           />
         </div>
-        <div className="field">
-          <label>UID (optional)</label>
-          <input
-            value={uid}
-            onChange={(e) => setUid(e.target.value)}
-            placeholder="Leave blank to auto-assign"
-            disabled={joined}
-          />
-        </div>
-
         <div className="field call-type-field">
           <label>Consultation type</label>
           <div className="segmented">
