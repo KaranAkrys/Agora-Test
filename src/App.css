@@ -571,3 +571,104 @@ button.danger:hover {
 .download-link:hover {
   background: #1f2430;
 }
+
+@media (max-width: 640px) {
+  .wrap {
+    padding: 20px 14px 40px;
+  }
+
+  h1 {
+    font-size: 19px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+
+  .panel {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .field-full,
+  .call-type-field,
+  .actions {
+    grid-column: 1 / -1;
+  }
+
+  .segmented {
+    width: 100%;
+  }
+
+  .seg-btn {
+    flex: 1;
+    padding: 9px 8px;
+    font-size: 13px;
+  }
+
+  .videos {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+
+  .call-dock {
+    gap: 8px;
+  }
+
+  .meet-controls {
+    gap: 10px;
+    padding: 8px 12px;
+  }
+
+  .meet-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .call-dock-timer {
+    font-size: 11.5px;
+    padding: 5px 9px;
+  }
+
+  .pip-overlay {
+    width: 88px;
+  }
+
+  .pip-thumb {
+    width: 60px;
+  }
+
+  .pip-thumbnails {
+    gap: 6px;
+    right: 8px;
+  }
+
+  .pip-main-label {
+    font-size: 11px;
+  }
+
+  .recording-row {
+    align-items: flex-start;
+  }
+
+  .recording-panel {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .call-dock {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .call-dock-timer {
+    justify-self: center;
+  }
+
+  .call-dock-spacer {
+    display: none;
+  }
+}
