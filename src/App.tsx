@@ -7,7 +7,7 @@ import AgoraRTC, {
 } from 'agora-rtc-sdk-ng'
 import { AudioLines, Clock, Disc, Download, Mic, MicOff, PhoneOff, Square, Video, VideoOff } from 'lucide-react'
 import './App.css'
-import { LocalTile, RemoteTile } from './VideoTile'
+import { LocalTile, NotJoinedTile, RemoteTile, WaitingForParticipantTile } from './VideoTile'
 import { PipView } from './PipView'
 
 type LogLine = { time: string; text: string }
@@ -480,14 +480,26 @@ function App() {
       )}
 
       <div className="video-area">
-        {callType === 'video' && viewMode === 'pip' ? (
-          <PipView callType={callType} localVideoTrack={localVideoTrack} remoteUsers={remoteUsers} />
+        {!joined ? (
+          <div className="videos">
+            <NotJoinedTile />
+          </div>
+        ) : callType === 'video' && viewMode === 'pip' ? (
+          <PipView
+            callType={callType}
+            localVideoTrack={localVideoTrack}
+            camOn={camOn}
+            micOn={micOn}
+            remoteUsers={remoteUsers}
+          />
         ) : (
           <div className="videos">
-            <LocalTile track={localVideoTrack} callType={callType} />
-            {remoteUsers.map((user) => (
-              <RemoteTile key={user.uid} user={user} />
-            ))}
+            <LocalTile track={localVideoTrack} callType={callType} camOn={camOn} micOn={micOn} />
+            {remoteUsers.length > 0 ? (
+              remoteUsers.map((user) => <RemoteTile key={user.uid} user={user} />)
+            ) : (
+              <WaitingForParticipantTile />
+            )}
           </div>
         )}
       </div>

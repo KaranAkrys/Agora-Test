@@ -153,6 +153,46 @@ button:disabled {
   opacity: 0.7;
 }
 
+.user-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #2c3140;
+  color: #9aa1ab;
+}
+
+.mic-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.9);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.pip-main .mic-badge {
+  bottom: 12px;
+  left: 12px;
+  right: auto;
+}
+
+.pip-thumb .mic-badge {
+  top: 4px;
+  right: 4px;
+  bottom: auto;
+  width: 18px;
+  height: 18px;
+}
+
 .audio-caption {
   font-size: 12px;
   color: #7b8290;

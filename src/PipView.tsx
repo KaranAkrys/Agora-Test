@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent, type RefObject } from 'react'
 import type { ICameraVideoTrack, IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
-import { AudioOnlyPlaceholder, LocalVideoSurface, RemoteVideoSurface } from './VideoTile'
+import { AudioOnlyPlaceholder, CameraOffPlaceholder, LocalVideoSurface, MicMutedBadge, RemoteVideoSurface } from './VideoTile'
 
 type CallType = 'video' | 'audio'
 
@@ -55,10 +55,14 @@ function DraggableOverlay({
 export function PipView({
   callType,
   localVideoTrack,
+  camOn,
+  micOn,
   remoteUsers,
 }: {
   callType: CallType
   localVideoTrack: ICameraVideoTrack | null
+  camOn: boolean
+  micOn: boolean
   remoteUsers: IAgoraRTCRemoteUser[]
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -77,11 +81,17 @@ export function PipView({
           <div className="pip-waiting">Waiting for a remote participant to join…</div>
         )}
         <div className="pip-main-label">{primary ? `Remote user ${primary.uid}` : 'No remote participant yet'}</div>
+        {primary && !primary.hasAudio && <MicMutedBadge />}
       </div>
 
       <DraggableOverlay containerRef={containerRef}>
         <div className="pip-overlay-label">You</div>
-        {callType === 'video' ? <LocalVideoSurface track={localVideoTrack} /> : <AudioOnlyPlaceholder />}
+        {callType === 'video' ? (
+          camOn ? <LocalVideoSurface track={localVideoTrack} /> : <CameraOffPlaceholder />
+        ) : (
+          <AudioOnlyPlaceholder />
+        )}
+        {!micOn && <MicMutedBadge />}
       </DraggableOverlay>
 
       {others.length > 0 && (
@@ -98,6 +108,7 @@ export function PipView({
               >
                 {hasVideo ? <RemoteVideoSurface user={user} /> : <AudioOnlyPlaceholder />}
                 <div className="pip-thumb-label">{user.uid}</div>
+                {!user.hasAudio && <MicMutedBadge />}
               </button>
             )
           })}

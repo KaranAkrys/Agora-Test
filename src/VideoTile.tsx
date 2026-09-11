@@ -1,6 +1,14 @@
 import { useEffect, useRef } from 'react'
-import { Mic } from 'lucide-react'
+import { LogIn, Mic, MicOff, User, Users } from 'lucide-react'
 import type { ICameraVideoTrack, IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng'
+
+export function MicMutedBadge() {
+  return (
+    <div className="mic-badge" title="Microphone muted">
+      <MicOff size={13} />
+    </div>
+  )
+}
 
 export function AudioOnlyPlaceholder() {
   return (
@@ -9,6 +17,45 @@ export function AudioOnlyPlaceholder() {
         <Mic size={28} />
       </div>
       <div className="audio-caption">Audio only — no camera published</div>
+    </div>
+  )
+}
+
+export function CameraOffPlaceholder() {
+  return (
+    <div className="audio-placeholder">
+      <div className="user-avatar">
+        <User size={30} />
+      </div>
+      <div className="audio-caption">Camera off</div>
+    </div>
+  )
+}
+
+export function NotJoinedTile() {
+  return (
+    <div className="video-tile">
+      <div className="video-label">No active call</div>
+      <div className="audio-placeholder">
+        <div className="user-avatar">
+          <LogIn size={28} />
+        </div>
+        <div className="audio-caption">No channel joined — fill in the details above and tap Join Call</div>
+      </div>
+    </div>
+  )
+}
+
+export function WaitingForParticipantTile() {
+  return (
+    <div className="video-tile">
+      <div className="video-label">Remote participant</div>
+      <div className="audio-placeholder">
+        <div className="user-avatar">
+          <Users size={28} />
+        </div>
+        <div className="audio-caption">Waiting for a remote participant to join…</div>
+      </div>
     </div>
   )
 }
@@ -47,14 +94,28 @@ export function RemoteVideoSurface({ user }: { user: IAgoraRTCRemoteUser }) {
 export function LocalTile({
   track,
   callType,
+  camOn,
+  micOn,
 }: {
   track: ICameraVideoTrack | null
   callType: 'video' | 'audio'
+  camOn: boolean
+  micOn: boolean
 }) {
+  const showVideo = callType === 'video' && camOn
+  const label = callType === 'video' ? (camOn ? 'Video' : 'Camera off') : 'Audio only'
+
   return (
     <div className="video-tile">
-      <div className="video-label">You (local) — {callType === 'video' ? 'Video' : 'Audio only'}</div>
-      {callType === 'video' ? <LocalVideoSurface track={track} /> : <AudioOnlyPlaceholder />}
+      <div className="video-label">You (local) — {label}</div>
+      {showVideo ? (
+        <LocalVideoSurface track={track} />
+      ) : callType === 'video' ? (
+        <CameraOffPlaceholder />
+      ) : (
+        <AudioOnlyPlaceholder />
+      )}
+      {!micOn && <MicMutedBadge />}
     </div>
   )
 }
@@ -68,6 +129,7 @@ export function RemoteTile({ user }: { user: IAgoraRTCRemoteUser }) {
         Remote user {user.uid} — {hasVideo ? 'Video' : 'Audio only'}
       </div>
       {hasVideo ? <RemoteVideoSurface user={user} /> : <AudioOnlyPlaceholder />}
+      {!user.hasAudio && <MicMutedBadge />}
     </div>
   )
 }
